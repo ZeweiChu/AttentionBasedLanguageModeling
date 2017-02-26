@@ -34,47 +34,42 @@ class RNNModel(nn.Module):
         #output, hidden = self.rnn(emb, hidden)
 
         #hidden: 2*20*200
-        hidden = hidden.squeeze(0)
-
+        h, c = hidden
+        h.data = h.data.squeeze(0)
+        c.data = c.data.squeeze(0)
 
         
         seq_len = input.size(0)
         batch_size = input.size(1)
-        output_dim = hidden.size(1)
+        output_dim = h.size(1)
 
 
-        output = Variable(torch.Tensor(seq_len, batch_size, output_dim))
-        #print(hidden.size())
-        c = Variable(hidden.data)
+        output = []
         for i in range(seq_len):
             # print("loop...")
             # print(emb[i].size())
             # print(hidden.size())
             # print(c.size())
             
-            hidden, c = self.rnncell(emb[i], (hidden, c))
-            o = Variable(torch.zeros(hidden.data.size()))
-            for j in range(i+1):
-                #att = torch.mm(torch.mm(hidden.data, self.bilinear_term.data), output.data[j].t())
+            h, c = self.rnncell(emb[i], (h, c))
+            o = Variable(torch.zeros(h.data.size()))
+            # hiddens: time * batch * nhid
+            if i == 0:
+                hiddens = h.unsqueeze(0)
+            else:
+                #print(hiddens.size())
+                #print(h.size())
+                hiddens = torch.cat([hiddens, h.unsqueeze(0)])
 
-                att = torch.Tensor(batch_size, 1)
-                #print(type(att))
-                #print(att.size())
+            h2 = h.unsqueeze(0).expand_as(hiddens)
+            att = torch.sum(hiddens * h2, 2).expand_as(hiddens)
+            o = att * hiddens
+            o = torch.sum(o, 0)
 
-                #how to optimize this? 
-                for k in range(batch_size):
-                    att[k][0] = torch.dot(hidden.data[k], output.data[j][k])
-                att = att.expand_as(hidden.data)
-                #att = torch.Tensor([att])
+            output.append(o) #hidden.data
 
-                #print(att.size())
-                #print(att)
-                #att = att.unsqueeze(1).expand(hidden.data.size())
-                o.data += att * output.data[j]
-            #print(output.data.size())
-            #print(hidden.data.size())
-            output.data[i] = o.data #hidden.data
-
+        output = torch.cat(output)
+        #print(output.size())
 
         #output = torch.FloatTensor(output)
         decoded = self.decoder(output.view(output.size(0)*output.size(1), output.size(2)))
@@ -83,7 +78,7 @@ class RNNModel(nn.Module):
     def init_hidden(self, bsz):
         weight = next(self.parameters()).data
         
-        if self.rnn_type == 'LSTM':
+        if self.rnn_type == 'LSTMCell':
             return (Variable(weight.new(self.nlayers, bsz, self.nhid).zero_()),
                     Variable(weight.new(self.nlayers, bsz, self.nhid).zero_()))
         else:
