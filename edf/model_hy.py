@@ -19,6 +19,9 @@ class RNNModel(nn.Module):
         self.logsoftmax = nn.LogSoftmax()
         self.softmax = nn.Softmax()
 
+        self.W = nn.Parameter(torch.zeros(nhid, 1))
+        self.U = nn.Parameter(torch.zeros(nhid, 1))
+
     def init_weights(self):
         initrange = 0.1
         self.encoder.weight.data.uniform_(-initrange, initrange)
@@ -28,8 +31,8 @@ class RNNModel(nn.Module):
     def forward(self, input, hidden):
         emb = self.encoder(input)
         h, c = hidden
-        h.data = h.data.squeeze(0)
-        c.data = c.data.squeeze(0)
+        h.data.squeeze_(0)
+        c.data.squeeze_(0)
 
         seq_len = input.size(0)
         batch_size = input.size(1)
@@ -38,27 +41,22 @@ class RNNModel(nn.Module):
         output = [] 
         for i in range(seq_len):        
             h, c = self.rnncell(emb[i], (h, c))
-
-            o = Variable(torch.zeros(h.data.size()))
             # self.hiddens: time * batch * nhid
             if i == 0:
                 self.hiddens = h.unsqueeze(0)
             else:
                 self.hiddens = torch.cat([self.hiddens, h.unsqueeze(0)])
+            # h: batch * nhid
+            #self.att = h.unsqueeze(0).expand_as(self.hiddens)
 
-            self.att = h.unsqueeze(0).expand_as(self.hiddens)
-            #print(att.size())
-            #print(self.hiddens.size())
-            self.att = self.hiddens * self.att
-            self.att = torch.sum(self.att, 2)
-            self.att = self.att.squeeze(2)
-            #print(att.size())
-            #.expand_as(self.hiddens)
-            self.att = self.softmax(self.att)#.t()).t()
-            self.att = self.att.unsqueeze(2).expand_as(self.hiddens)
-            o = self.att * self.hiddens
-            o = torch.sum(o, 0)
-            output.append(o) #hidden.data
+            self.hiddens = self.hiddens.view(-1, self.nhid)
+            b = torch.mm(self.hiddens, self.U).view(-1, batch_size, 1)
+            a = torch.mm(h, self.W).unsqueeze(0).expand_as(b)
+            att = torch.tanh(a + b).view(-1, batch_size)
+            att = self.softmax(att.t()).t()
+            self.hiddens = self.hiddens.view(-1, batch_size, self.nhid)
+            att = att.unsqueeze(2).expand_as(self.hiddens)
+            output.append(torch.sum(att * self.hiddens, 0)) #hidden.data
 
         output = torch.cat(output)
 
