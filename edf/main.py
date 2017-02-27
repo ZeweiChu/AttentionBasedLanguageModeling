@@ -14,6 +14,8 @@ valid_data, vacnt = utils.load_data_onechar('data/ptb.valid.txt', False)
 test_data, tecnt = utils.load_data_onechar('data/ptb.test.txt', False)
 
 
+use_cuda = True
+
 def CalPerp(output, target, masks):
     prob = output.gather(1, target).data#.numpy()
     masks = masks.data#.numpy()
@@ -32,12 +34,15 @@ def Eval(data, cnt, model):
         
         x_padded = utils.make_mask(minbatch)
         
-        x_padded = repackage_variable(x_padded)
+        x_padded = repackage_variable(x_padded, True)
         x_padded = torch.cat(x_padded, 1)
         T = x_padded.size(0)
         B = x_padded.size(1)
         inp = x_padded[:T-1, :].long()
         target = x_padded[1:, :].long().view(-1, 1)
+        if use_cuda:
+            inp = inp.cuda()
+            target = target.cuda()
         
         mask = (inp != 0).float().view(-1, 1)
         
@@ -72,6 +77,8 @@ def Predict(max_step, prefix, model):
         
         hidden = model.init_hidden(1)
         inp = Variable(torch.LongTensor([[pred]]))
+        if use_cuda:
+            inp = inp.cuda()
         #print(inp)
         output, hidden = model(inp, hidden)
         output = output.view(n_vocab)
@@ -105,8 +112,8 @@ def clip_gradient(model, clip):
     totalnorm = math.sqrt(totalnorm)
     return min(1, clip / (totalnorm + 1e-6))
 
-def repackage_variable(v):
-    return [Variable(torch.from_numpy(h)).unsqueeze(1) for h in v]
+def repackage_variable(v, volatile=False):
+    return [Variable(torch.from_numpy(h), volatile=volatile).unsqueeze(1) for h in v]
 
 batches = range(0, len(train_data) - batch, batch)
 minbatches = [train_data[idx:idx+batch] for idx in batches]
@@ -114,6 +121,8 @@ minbatches = [train_data[idx:idx+batch] for idx in batches]
 epoch = 30
 
 model = RNNModel("LSTMCell", n_vocab, hidden_dim, hidden_dim, 1)
+if use_cuda == True:
+    model.cuda()
 #model = torch.load("model_att_torch.pkl")
 crit = torch.nn.CrossEntropyLoss()
 
@@ -139,13 +148,17 @@ for ep in range(epoch):
         
         minbatch = minbatches[perm[k]]
         x_padded = utils.make_mask(minbatch)
-        x_padded = repackage_variable(x_padded)
+        x_padded = repackage_variable(x_padded, False)
         x_padded = torch.cat(x_padded, 1)
         T = x_padded.size(0)
         B = x_padded.size(1)
         inp = x_padded[:T-1, :].long()
         target = x_padded[1:, :].long().view(-1, 1)
-        
+        if use_cuda:
+            inp = inp.cuda()
+            target = target.cuda()       
+
+ 
         mask = (inp != 0).float().view(-1, 1)
         
         hidden = model.init_hidden(batch)
