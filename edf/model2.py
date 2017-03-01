@@ -54,7 +54,7 @@ class RNNModel(nn.Module):
             self.att = self.att.squeeze(2)
             #print(att.size())
             #.expand_as(self.hiddens)
-            self.att = self.softmax(self.att)#.t()).t()
+            self.att = self.softmax(self.att)
             self.att = self.att.unsqueeze(2).expand_as(self.hiddens)
             o = self.att * self.hiddens
             o = torch.sum(o, 0)

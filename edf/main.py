@@ -6,7 +6,7 @@ import pickle
 import os
 import torch
 from torch.autograd import Variable
-from model_hy import RNNModel
+from model2 import RNNModel
 import math
 
 train_data, trcnt = utils.load_data_onechar('data/ptb.train.txt', False)
@@ -76,7 +76,7 @@ def Predict(max_step, prefix, model):
         
         
         hidden = model.init_hidden(1)
-        inp = Variable(torch.LongTensor([[pred]]), volatile=True)
+        inp = Variable(torch.LongTensor([[pred]]))
         if use_cuda:
             inp = inp.cuda()
         #print(inp)
@@ -126,8 +126,6 @@ if use_cuda == True:
 #model = torch.load("model_att_torch.pkl")
 crit = torch.nn.CrossEntropyLoss()
 
-optimizer = torch.optim.Adam(model.parameters(), lr = eta)
-
 prefix = 'the agreements bring'  
 generation = Predict(400, utils.to_idxs(prefix), model)
 print("generated sentence ")
@@ -173,21 +171,19 @@ for ep in range(epoch):
         loss = -torch.sum(loss) / torch.sum(mask)
         loss.backward()
         
-
-        optimizer.step()
         #clipped_lr = lr * clip_gradient(model, args.clip)
-        # clipped_lr = eta * clip_gradient(model, 0.5)
-        # for p in model.parameters():
-        #     p.data.add_(-clipped_lr, p.grad.data)
+        clipped_lr = eta * clip_gradient(model, 0.5)
+        for p in model.parameters():
+            p.data.add_(-clipped_lr, p.grad.data)
         
         
-        # if k % 5 == 0:
-        #     #print(loss.data)
-        #     #output = output.max(1)[1]
-        # acc = torch.sum((output.max(1)[1] == target).float() * mask) / torch.sum(mask)
-        # print("Batch accuracy: " + str(acc.data))
+        if k % 200 == 0:
+            #print(loss.data)
+            #output = output.max(1)[1]
+            acc = torch.sum((output.max(1)[1] == target).float() * mask) / torch.sum(mask)
+            print("Batch accuracy: " + str(acc.data))
       
-    print("Epoch: " + str(ep) + ": ")
+    
     prefix = 'the agreements bring'  
     generation = Predict(400, utils.to_idxs(prefix), model)
     print("generated sentence ")
