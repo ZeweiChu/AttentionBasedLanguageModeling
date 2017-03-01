@@ -40,23 +40,23 @@ class RNNModel(nn.Module):
             h, c = self.rnncell(emb[i], (h, c))
 
             o = Variable(torch.zeros(h.data.size()))
-            # self.hiddens: time * batch * nhid
+            # hiddens: time * batch * nhid
             if i == 0:
-                self.hiddens = h.unsqueeze(0)
+                hiddens = h.unsqueeze(0)
             else:
-                self.hiddens = torch.cat([self.hiddens, h.unsqueeze(0)])
+                hiddens = torch.cat([hiddens, h.unsqueeze(0)])
 
-            self.att = h.unsqueeze(0).expand_as(self.hiddens)
+            att = h.unsqueeze(0).expand_as(hiddens)
             #print(att.size())
-            #print(self.hiddens.size())
-            self.att = self.hiddens * self.att
-            self.att = torch.sum(self.att, 2)
-            self.att = self.att.squeeze(2)
+            #print(hiddens.size())
+            att = hiddens * att
+            att = torch.sum(att, 2)
+            att = att.squeeze(2)
             #print(att.size())
-            #.expand_as(self.hiddens)
-            self.att = self.softmax(self.att)
-            self.att = self.att.unsqueeze(2).expand_as(self.hiddens)
-            o = self.att * self.hiddens
+            #.expand_as(hiddens)
+            att = self.softmax(att.t()).t()
+            att = att.unsqueeze(2).expand_as(hiddens)
+            o = att * hiddens
             o = torch.sum(o, 0)
             output.append(o) #hidden.data
 
